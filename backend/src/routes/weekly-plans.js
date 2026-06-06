@@ -143,7 +143,8 @@ router.post('/add-recipe', auth, async (req, res) => {
     }
 
     let weeklyPlan = await WeeklyPlan.findOne({
-      where: { userId: req.user.id, weekNumber, year }
+      where: { userId: req.user.id, weekNumber, year },
+      include: [{ model: Recipe, as: 'recipes', attributes: ['id'] }]
     });
 
     if (!weeklyPlan) {
@@ -154,11 +155,9 @@ router.post('/add-recipe', auth, async (req, res) => {
       });
     }
 
-    const existing = await WeeklyPlanRecipe.findOne({
-      where: { weeklyPlanId: weeklyPlan.id, recipeId }
-    });
-
-    if (existing) {
+    const existingRecipeIds = weeklyPlan.recipes ? weeklyPlan.recipes.map(r => Number(r.id)) : [];
+    
+    if (existingRecipeIds.includes(Number(recipeId))) {
       return res.status(400).json({ error: '该菜谱已在本周计划中' });
     }
 
@@ -289,11 +288,21 @@ router.get('/nutrition', auth, async (req, res) => {
 router.get('/replacement-suggestions/:recipeId', auth, async (req, res) => {
   try {
     const { recipeId } = req.params;
+    const { weekNumber, year } = getCurrentWeek();
     
     const recipeToReplace = await Recipe.findByPk(recipeId);
     if (!recipeToReplace) {
       return res.status(404).json({ error: '菜谱不存在' });
     }
+
+    const weeklyPlan = await WeeklyPlan.findOne({
+      where: { userId: req.user.id, weekNumber, year },
+      include: [{ model: Recipe, as: 'recipes', attributes: ['id'] }]
+    });
+
+    const existingRecipeIds = weeklyPlan && weeklyPlan.recipes 
+      ? weeklyPlan.recipes.map(r => r.id) 
+      : [];
 
     const allRecipes = await Recipe.findAll({
       where: {
@@ -301,7 +310,7 @@ router.get('/replacement-suggestions/:recipeId', auth, async (req, res) => {
       }
     });
 
-    const suggestions = await findReplacementRecipes(req.user.id, recipeToReplace, allRecipes);
+    const suggestions = await findReplacementRecipes(req.user.id, recipeToReplace, allRecipes, existingRecipeIds);
     
     res.json(suggestions);
   } catch (error) {
@@ -318,12 +327,27 @@ router.post('/replace-recipe', auth, async (req, res) => {
       return res.status(400).json({ error: '请提供要替换的菜谱ID和新菜谱ID' });
     }
 
+    if (Number(oldRecipeId) === Number(newRecipeId)) {
+      return res.status(400).json({ error: '新菜谱与要替换的菜谱相同' });
+    }
+
     const weeklyPlan = await WeeklyPlan.findOne({
-      where: { userId: req.user.id, weekNumber, year }
+      where: { userId: req.user.id, weekNumber, year },
+      include: [{ model: Recipe, as: 'recipes', attributes: ['id'] }]
     });
 
     if (!weeklyPlan) {
       return res.status(404).json({ error: '本周计划不存在' });
+    }
+
+    const existingRecipeIds = weeklyPlan.recipes ? weeklyPlan.recipes.map(r => Number(r.id)) : [];
+    
+    if (existingRecipeIds.includes(Number(newRecipeId))) {
+      return res.status(400).json({ error: '该菜谱已在本周计划中' });
+    }
+
+    if (!existingRecipeIds.includes(Number(oldRecipeId))) {
+      return res.status(400).json({ error: '要替换的菜谱不在本周计划中' });
     }
 
     const oldRecipe = await Recipe.findByPk(oldRecipeId);

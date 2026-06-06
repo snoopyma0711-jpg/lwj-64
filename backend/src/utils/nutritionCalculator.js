@@ -392,16 +392,18 @@ const calculateWeeklyPlanNutrition = async (userId, recipes) => {
   };
 };
 
-const findReplacementRecipes = async (userId, recipeToReplace, allRecipes) => {
+const findReplacementRecipes = async (userId, recipeToReplace, allRecipes, excludeRecipeIds = []) => {
   const recipeNutrition = await calculateRecipeNutrition(userId, recipeToReplace);
   const originalCalories = recipeNutrition.totalCalories;
   
   const targetIngredients = recipeToReplace.ingredients.map(ing => ing.name.toLowerCase());
   
   const candidates = [];
+  const excludeIdsSet = new Set(excludeRecipeIds.map(id => Number(id)));
   
   for (const candidate of allRecipes) {
     if (candidate.id === recipeToReplace.id) continue;
+    if (excludeIdsSet.has(Number(candidate.id))) continue;
     
     const candidateIngredients = candidate.ingredients.map(ing => ing.name.toLowerCase());
     const intersection = targetIngredients.filter(ing => 
@@ -410,6 +412,16 @@ const findReplacementRecipes = async (userId, recipeToReplace, allRecipes) => {
     
     if (intersection.length > 0) {
       const candidateNutrition = await calculateRecipeNutrition(userId, candidate);
+      
+      if (!candidateNutrition.hasCompleteData) {
+        const dataCoverage = candidateNutrition.totalIngredients > 0 
+          ? candidateNutrition.ingredientsWithData / candidateNutrition.totalIngredients 
+          : 0;
+        if (dataCoverage < 0.7) continue;
+      }
+      
+      if (candidateNutrition.totalCalories <= 0) continue;
+      
       const calorieDifference = originalCalories - candidateNutrition.totalCalories;
       
       if (calorieDifference > 0) {

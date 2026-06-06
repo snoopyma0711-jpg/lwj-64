@@ -280,6 +280,21 @@ const WeeklyPlan = () => {
                 <Text type="secondary" style={{ fontSize: 12 }}>
                   目标: {dailyCalorieGoal} 千卡
                 </Text>
+                {nutrition.completeDataCount !== undefined && nutrition.totalRecipes > 0 && (
+                  <div style={{ marginTop: 2 }}>
+                    {nutrition.hasCompleteData ? (
+                      <Tag color="green" icon={<CheckCircleOutlined />} style={{ fontSize: 11, padding: '0 6px' }}>
+                        营养数据完整
+                      </Tag>
+                    ) : (
+                      <Tooltip title={`${nutrition.completeDataCount}/${nutrition.totalRecipes} 道菜谱有完整营养数据`}>
+                        <Tag color="warning" icon={<InfoCircleOutlined />} style={{ fontSize: 11, padding: '0 6px' }}>
+                          {nutrition.completeDataCount}/{nutrition.totalRecipes} 完整
+                        </Tag>
+                      </Tooltip>
+                    )}
+                  </div>
+                )}
               </div>
             </Col>
             <Col xs={24} sm={12} md={6}>
@@ -489,17 +504,30 @@ const WeeklyPlan = () => {
                               <ClockCircleOutlined style={{ color: '#8c8c8c' }} />
                               <Text type="secondary">{recipe.estimatedTime}分钟</Text>
                               {recipeNutrition && (
-                                <>
-                                  <Divider type="vertical" />
-                                  <FireOutlined style={{ color: '#fa8c16' }} />
-                                  <Text type="secondary">
-                                    约 <Text strong style={{ color: '#fa8c16' }}>{recipeNutrition.totalCalories}</Text> 千卡
-                                  </Text>
-                                  <Tag color="blue" style={{ margin: 0 }}>
-                                    每份 {recipeNutrition.caloriesPerServing} 千卡
-                                  </Tag>
-                                </>
-                              )}
+                              <>
+                                <Divider type="vertical" />
+                                <FireOutlined style={{ color: '#fa8c16' }} />
+                                <Text type="secondary">
+                                  约 <Text strong style={{ color: '#fa8c16' }}>{recipeNutrition.totalCalories}</Text> 千卡
+                                </Text>
+                                <Tag color="blue" style={{ margin: 0 }}>
+                                  每份 {recipeNutrition.caloriesPerServing} 千卡
+                                </Tag>
+                                {recipeNutrition.hasCompleteData ? (
+                                  <Tooltip title="所有食材都有完整的营养数据">
+                                    <Tag color="green" icon={<CheckCircleOutlined />} style={{ marginLeft: 4 }}>
+                                      完整
+                                    </Tag>
+                                  </Tooltip>
+                                ) : (
+                                  <Tooltip title={`部分食材缺少营养数据（${recipeNutrition.ingredientsWithData}/${recipeNutrition.totalIngredients}），估算值可能不准确`}>
+                                    <Tag color="warning" icon={<InfoCircleOutlined />} style={{ marginLeft: 4 }}>
+                                      不完整
+                                    </Tag>
+                                  </Tooltip>
+                                )}
+                              </>
+                            )}
                             </Space>
                             {recipeNutrition && (
                               <Space size={[12, 0]} style={{ marginTop: 4 }}>
@@ -818,7 +846,10 @@ const WeeklyPlan = () => {
             image={Empty.PRESENTED_IMAGE_SIMPLE}
           >
             <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
-              系统没有找到食材有交集且热量更低的菜谱
+              系统没有找到食材有交集、热量更低且营养数据完整的菜谱
+            </Text>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 12, fontSize: 12 }}>
+              💡 建议先去「食材价格管理」中录入更多食材的营养数据
             </Text>
             <Button type="primary" onClick={() => navigate('/recipes')} style={{ background: '#fa8c16', borderColor: '#fa8c16' }}>
               去浏览所有菜谱
@@ -865,6 +896,19 @@ const WeeklyPlan = () => {
                         <Tag color="blue">
                           每份 {suggestion.nutrition.caloriesPerServing} 千卡
                         </Tag>
+                        {suggestion.nutrition.hasCompleteData ? (
+                          <Tooltip title="所有食材都有完整的营养数据">
+                            <Tag color="green" icon={<CheckCircleOutlined />}>
+                              数据完整
+                            </Tag>
+                          </Tooltip>
+                        ) : (
+                          <Tooltip title={`部分食材缺少营养数据（${suggestion.nutrition.ingredientsWithData}/${suggestion.nutrition.totalIngredients}），估算值可能偏低`}>
+                            <Tag color="warning" icon={<InfoCircleOutlined />}>
+                              数据不完整
+                            </Tag>
+                          </Tooltip>
+                        )}
                       </Space>
                       <div>
                         <Text type="secondary" style={{ fontSize: 12 }}>
