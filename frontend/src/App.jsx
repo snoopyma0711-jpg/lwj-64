@@ -1,6 +1,6 @@
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Layout, Menu, Dropdown, Avatar, Button, Space } from 'antd';
-import { UserOutlined, LogoutOutlined, PlusOutlined, UnorderedListOutlined, CalendarOutlined, AppstoreOutlined } from '@ant-design/icons';
+import { UserOutlined, LogoutOutlined, PlusOutlined, UnorderedListOutlined, CalendarOutlined, AppstoreOutlined, TagOutlined, LineChartOutlined } from '@ant-design/icons';
 import { useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -11,6 +11,8 @@ import WeeklyPlan from './pages/WeeklyPlan';
 import CollectionList from './pages/CollectionList';
 import CreateCollection from './pages/CreateCollection';
 import CollectionDetail from './pages/CollectionDetail';
+import IngredientPriceManager from './pages/IngredientPriceManager';
+import ExpenseTrend from './pages/ExpenseTrend';
 import { Link, useLocation } from 'react-router-dom';
 
 const { Header, Content, Footer } = Layout;
@@ -68,6 +70,16 @@ const AppLayout = ({ children }) => {
       key: '/weekly-plan',
       icon: <CalendarOutlined />,
       label: <Link to="/weekly-plan">周计划 & 购物清单</Link>
+    },
+    {
+      key: '/ingredient-prices',
+      icon: <TagOutlined />,
+      label: <Link to="/ingredient-prices">食材价格库</Link>
+    },
+    {
+      key: '/expense-trend',
+      icon: <LineChartOutlined />,
+      label: <Link to="/expense-trend">花销趋势</Link>
     }
   ];
 
@@ -120,6 +132,8 @@ const App = () => {
       <Route path="/collections/edit/:id" element={<PrivateRoute><AppLayout><CreateCollection /></AppLayout></PrivateRoute>} />
       <Route path="/collections/:id" element={<PrivateRoute><AppLayout><CollectionDetail /></AppLayout></PrivateRoute>} />
       <Route path="/weekly-plan" element={<PrivateRoute><AppLayout><WeeklyPlan /></AppLayout></PrivateRoute>} />
+      <Route path="/ingredient-prices" element={<PrivateRoute><AppLayout><IngredientPriceManager /></AppLayout></PrivateRoute>} />
+      <Route path="/expense-trend" element={<PrivateRoute><AppLayout><ExpenseTrend /></AppLayout></PrivateRoute>} />
       <Route path="/" element={<Navigate to="/recipes" />} />
       <Route path="*" element={<Navigate to="/recipes" />} />
     </Routes>

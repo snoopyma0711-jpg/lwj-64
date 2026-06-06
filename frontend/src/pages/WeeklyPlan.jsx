@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Card, List, Button, Checkbox, Space, Typography, Tag, Popconfirm, message, Row, Col, Divider, Empty, Badge } from 'antd';
-import { DeleteOutlined, ShoppingCartOutlined, ClearOutlined, CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import { Card, List, Button, Checkbox, Space, Typography, Tag, Popconfirm, message, Row, Col, Divider, Empty, Badge, Tooltip } from 'antd';
+import { DeleteOutlined, ShoppingCartOutlined, ClearOutlined, CheckCircleOutlined, ClockCircleOutlined, DollarOutlined, InfoCircleOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import request from '../api/request';
 import { useNavigate } from 'react-router-dom';
 
@@ -60,7 +60,7 @@ const WeeklyPlan = () => {
   const handleClearPlan = async () => {
     try {
       await request.delete('/weekly-plans/clear');
-      message.success('已清空本周计划');
+      message.success('已清空本周计划，花销已自动记录');
       fetchWeeklyPlan();
     } catch (error) {
       message.error('清空失败');
@@ -74,6 +74,13 @@ const WeeklyPlan = () => {
   const recipes = weeklyPlan?.recipes || [];
   const shoppingItems = weeklyPlan?.shoppingItems || [];
   const purchasedCount = shoppingItems.filter(item => item.purchased).length;
+  const totalEstimatedPrice = weeklyPlan?.totalEstimatedPrice || 0;
+  const pricedItemCount = weeklyPlan?.pricedItemCount || 0;
+  const unpricedItemCount = weeklyPlan?.unpricedItemCount || 0;
+
+  const purchasedPrice = shoppingItems
+    .filter(item => item.purchased && item.isPriced)
+    .reduce((sum, item) => sum + item.estimatedPrice, 0);
 
   return (
     <div>
@@ -81,7 +88,17 @@ const WeeklyPlan = () => {
         <Title level={3} style={{ margin: 0 }}>📅 本周计划 & 购物清单</Title>
         {recipes.length > 0 && (
           <Popconfirm
-            title="确定要清空本周计划吗？购物清单也会同步清空。"
+            title="确定要清空本周计划吗？"
+            description={
+              <div>
+                <p>购物清单也会同步清空。</p>
+                {purchasedCount > 0 && (
+                  <p style={{ color: '#fa8c16' }}>
+                    已勾选"已购买"的 <b>{purchasedCount}</b> 项食材将被记录到周花销中。
+                  </p>
+                )}
+              </div>
+            }
             onConfirm={handleClearPlan}
             okText="确定"
             cancelText="取消"
@@ -159,15 +176,47 @@ const WeeklyPlan = () => {
         <Col xs={24} lg={12}>
           <Card 
             title={
-              <Space>
-                <ShoppingCartOutlined style={{ color: '#fa8c16' }} />
-                <span>购物清单</span>
+              <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+                <Space>
+                  <ShoppingCartOutlined style={{ color: '#fa8c16' }} />
+                  <span>购物清单</span>
+                  {shoppingItems.length > 0 && (
+                    <Tag color={purchasedCount === shoppingItems.length ? 'success' : 'processing'}>
+                      {purchasedCount}/{shoppingItems.length} 已买
+                    </Tag>
+                  )}
+                </Space>
                 {shoppingItems.length > 0 && (
-                  <Tag color={purchasedCount === shoppingItems.length ? 'success' : 'processing'}>
-                    {purchasedCount}/{shoppingItems.length} 已买
-                  </Tag>
+                  <Space>
+                    <Tag color="orange">
+                      <DollarOutlined /> 已定价 {pricedItemCount} 项
+                    </Tag>
+                    {unpricedItemCount > 0 && (
+                      <Tooltip title="点击下方按钮录入食材价格">
+                        <Tag 
+                          color="warning" 
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => navigate('/ingredient-prices')}
+                        >
+                          <QuestionCircleOutlined /> 未定价 {unpricedItemCount} 项
+                        </Tag>
+                      </Tooltip>
+                    )}
+                  </Space>
                 )}
               </Space>
+            }
+            extra={
+              shoppingItems.length > 0 && (
+                <Button 
+                  type="link" 
+                  size="small" 
+                  icon={<DollarOutlined />}
+                  onClick={() => navigate('/ingredient-prices')}
+                >
+                  管理价格
+                </Button>
+              )
             }
           >
             {shoppingItems.length === 0 ? (
@@ -186,25 +235,87 @@ const WeeklyPlan = () => {
                   dataSource={shoppingItems}
                   renderItem={(item) => (
                     <List.Item key={item.id}>
-                      <Space style={{ width: '100%' }} onClick={() => handleTogglePurchased(item)}>
-                        <Checkbox checked={item.purchased} />
-                        <Text 
-                          strong 
-                          className={item.purchased ? 'shopping-item-purchased' : ''}
-                        >
-                          {item.ingredientName}
-                        </Text>
-                        <Text 
-                          type="secondary"
-                          className={item.purchased ? 'shopping-item-purchased' : ''}
-                        >
-                          {item.quantity}
-                        </Text>
-                        {item.purchased && <CheckCircleOutlined style={{ color: '#52c41a' }} />}
+                      <Space style={{ width: '100%', justifyContent: 'space-between' }} onClick={() => handleTogglePurchased(item)}>
+                        <Space>
+                          <Checkbox checked={item.purchased} />
+                          <Text 
+                            strong 
+                            className={item.purchased ? 'shopping-item-purchased' : ''}
+                          >
+                            {item.ingredientName}
+                          </Text>
+                          <Text 
+                            type="secondary"
+                            className={item.purchased ? 'shopping-item-purchased' : ''}
+                          >
+                            {item.quantity}
+                          </Text>
+                          {item.purchased && <CheckCircleOutlined style={{ color: '#52c41a' }} />}
+                        </Space>
+                        <Space>
+                          {item.isPriced ? (
+                            <Space>
+                              <Text type="secondary" style={{ fontSize: 12 }}>
+                                ¥{item.unitPrice}/{item.unit.replace('元/', '')}
+                              </Text>
+                              <Tag color="orange" style={{ margin: 0 }}>
+                                ¥{item.estimatedPrice.toFixed(2)}
+                              </Tag>
+                            </Space>
+                          ) : (
+                            <Tooltip title="点击去录入该食材价格">
+                              <Tag 
+                                color="default" 
+                                style={{ cursor: 'pointer', margin: 0 }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate('/ingredient-prices');
+                                }}
+                              >
+                                未定价
+                              </Tag>
+                            </Tooltip>
+                          )}
+                        </Space>
                       </Space>
                     </List.Item>
                   )}
                 />
+                
+                <Divider style={{ margin: '16px 0' }} />
+                
+                <Card 
+                  size="small" 
+                  style={{ background: '#fffbe6', border: '1px solid #ffe58f' }}
+                >
+                  <Row gutter={16} align="middle">
+                    <Col span={12}>
+                      <Space>
+                        <DollarOutlined style={{ color: '#fa8c16' }} />
+                        <Text type="secondary">清单预估总价：</Text>
+                        <Text strong style={{ fontSize: 24, color: '#fa8c16' }}>
+                          ¥{totalEstimatedPrice.toFixed(2)}
+                        </Text>
+                      </Space>
+                    </Col>
+                    <Col span={12} style={{ textAlign: 'right' }}>
+                      <Space direction="vertical" size={0} align="end">
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          已购买食材：
+                          <Text strong style={{ color: '#52c41a', marginLeft: 4 }}>
+                            ¥{purchasedPrice.toFixed(2)}
+                          </Text>
+                        </Text>
+                        {unpricedItemCount > 0 && (
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            <InfoCircleOutlined /> {unpricedItemCount} 项未定价，未计入总价
+                          </Text>
+                        )}
+                      </Space>
+                    </Col>
+                  </Row>
+                </Card>
+
                 {purchasedCount === shoppingItems.length && shoppingItems.length > 0 && (
                   <div style={{ marginTop: 16, textAlign: 'center', padding: 16, background: '#f6ffed', borderRadius: 8 }}>
                     <Space>

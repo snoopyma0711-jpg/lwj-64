@@ -1,6 +1,7 @@
 const express = require('express');
-const { WeeklyPlan, Recipe, ShoppingItem, WeeklyPlanRecipe } = require('../models');
+const { WeeklyPlan, Recipe, ShoppingItem, WeeklyPlanRecipe, WeeklyExpense, Op } = require('../models');
 const auth = require('../middleware/auth');
+const { calculateShoppingListPrices } = require('../utils/priceCalculator');
 
 const router = express.Router();
 
@@ -101,7 +102,15 @@ router.get('/current', auth, async (req, res) => {
       });
     }
 
-    res.json(weeklyPlan);
+    const planData = weeklyPlan.toJSON();
+    const priceResult = await calculateShoppingListPrices(req.user.id, planData.shoppingItems || []);
+    
+    planData.shoppingItems = priceResult.items;
+    planData.totalEstimatedPrice = priceResult.totalPrice;
+    planData.pricedItemCount = priceResult.pricedCount;
+    planData.unpricedItemCount = priceResult.unpricedCount;
+
+    res.json(planData);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -153,7 +162,15 @@ router.post('/add-recipe', auth, async (req, res) => {
       ]
     });
 
-    res.json(updatedPlan);
+    const planData = updatedPlan.toJSON();
+    const priceResult = await calculateShoppingListPrices(req.user.id, planData.shoppingItems || []);
+    
+    planData.shoppingItems = priceResult.items;
+    planData.totalEstimatedPrice = priceResult.totalPrice;
+    planData.pricedItemCount = priceResult.pricedCount;
+    planData.unpricedItemCount = priceResult.unpricedCount;
+
+    res.json(planData);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -189,7 +206,15 @@ router.post('/remove-recipe', auth, async (req, res) => {
       ]
     });
 
-    res.json(updatedPlan);
+    const planData = updatedPlan.toJSON();
+    const priceResult = await calculateShoppingListPrices(req.user.id, planData.shoppingItems || []);
+    
+    planData.shoppingItems = priceResult.items;
+    planData.totalEstimatedPrice = priceResult.totalPrice;
+    planData.pricedItemCount = priceResult.pricedCount;
+    planData.unpricedItemCount = priceResult.unpricedCount;
+
+    res.json(planData);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -222,11 +247,38 @@ router.delete('/clear', auth, async (req, res) => {
     const { weekNumber, year } = getCurrentWeek();
 
     const weeklyPlan = await WeeklyPlan.findOne({
-      where: { userId: req.user.id, weekNumber, year }
+      where: { userId: req.user.id, weekNumber, year },
+      include: [
+        { model: ShoppingItem, as: 'shoppingItems' }
+      ]
     });
 
     if (!weeklyPlan) {
       return res.json({ message: '本周计划为空' });
+    }
+
+    const purchasedItems = weeklyPlan.shoppingItems.filter(item => item.purchased);
+    if (purchasedItems.length > 0) {
+      const priceResult = await calculateShoppingListPrices(req.user.id, purchasedItems);
+      
+      const existingExpense = await WeeklyExpense.findOne({
+        where: { userId: req.user.id, weekNumber, year }
+      });
+      
+      if (existingExpense) {
+        await existingExpense.update({
+          totalAmount: priceResult.totalPrice,
+          itemCount: purchasedItems.length
+        });
+      } else {
+        await WeeklyExpense.create({
+          userId: req.user.id,
+          weekNumber,
+          year,
+          totalAmount: priceResult.totalPrice,
+          itemCount: purchasedItems.length
+        });
+      }
     }
 
     await WeeklyPlanRecipe.destroy({ where: { weeklyPlanId: weeklyPlan.id } });
