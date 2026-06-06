@@ -1,5 +1,6 @@
 const express = require('express');
-const { WeeklyExpense, Op } = require('../models');
+const { Op } = require('sequelize');
+const { WeeklyExpense } = require('../models');
 const auth = require('../middleware/auth');
 
 const router = express.Router();

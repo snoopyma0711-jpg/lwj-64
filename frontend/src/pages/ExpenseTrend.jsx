@@ -29,14 +29,14 @@ const ExpenseTrend = () => {
   const chartData = trendData.map(item => ({
     name: `第${item.weekNumber}周`,
     fullName: item.weekLabel,
-    金额: item.totalAmount,
-    食材数: item.itemCount
+    金额: parseFloat(item.totalAmount),
+    食材数: parseInt(item.itemCount)
   }));
 
-  const totalAmount = trendData.reduce((sum, item) => sum + item.totalAmount, 0);
+  const totalAmount = trendData.reduce((sum, item) => sum + parseFloat(item.totalAmount), 0);
   const avgAmount = trendData.length > 0 ? (totalAmount / trendData.length).toFixed(2) : 0;
-  const maxAmount = trendData.length > 0 ? Math.max(...trendData.map(item => item.totalAmount)).toFixed(2) : 0;
-  const minAmount = trendData.length > 0 ? Math.min(...trendData.map(item => item.totalAmount)).toFixed(2) : 0;
+  const maxAmount = trendData.length > 0 ? Math.max(...trendData.map(item => parseFloat(item.totalAmount))).toFixed(2) : 0;
+  const minAmount = trendData.length > 0 ? Math.min(...trendData.map(item => parseFloat(item.totalAmount))).toFixed(2) : 0;
 
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
@@ -59,7 +59,7 @@ const ExpenseTrend = () => {
   const getTrendIndicator = () => {
     if (trendData.length < 2) return null;
     const lastTwo = trendData.slice(-2);
-    const diff = lastTwo[1].totalAmount - lastTwo[0].totalAmount;
+    const diff = parseFloat(lastTwo[1].totalAmount) - parseFloat(lastTwo[0].totalAmount);
     if (diff > 0) {
       return (
         <Tag color="red" icon={<RiseOutlined />}>
@@ -162,8 +162,8 @@ const ExpenseTrend = () => {
           />
         ) : (
           <>
-            <div style={{ height: 350, width: '100%' }}>
-              <ResponsiveContainer width="100%" height="100%">
+            <div style={{ height: 400, width: '100%', minWidth: 600, minHeight: 300 }}>
+              <ResponsiveContainer width="100%" height="100%" minWidth={600} minHeight={300}>
                 <LineChart
                   data={chartData}
                   margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
@@ -185,10 +185,11 @@ const ExpenseTrend = () => {
                     type="monotone"
                     dataKey="金额"
                     stroke="#fa8c16"
-                    strokeWidth={3}
-                    dot={{ fill: '#fa8c16', strokeWidth: 2, r: 6 }}
-                    activeDot={{ r: 8, fill: '#fa8c16' }}
+                    strokeWidth={4}
+                    dot={{ fill: '#fa8c16', stroke: '#fff', strokeWidth: 2, r: 7 }}
+                    activeDot={{ r: 10, fill: '#fa8c16', stroke: '#fff', strokeWidth: 2 }}
                     name="支出金额 (元)"
+                    connectNulls
                   />
                 </LineChart>
               </ResponsiveContainer>

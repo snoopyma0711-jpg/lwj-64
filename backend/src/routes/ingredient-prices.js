@@ -1,5 +1,6 @@
 const express = require('express');
-const { IngredientPrice, Op } = require('../models');
+const { Op } = require('sequelize');
+const { IngredientPrice } = require('../models');
 const auth = require('../middleware/auth');
 
 const router = express.Router();
@@ -22,6 +23,7 @@ router.get('/', auth, async (req, res) => {
     
     res.json(prices);
   } catch (error) {
+    console.error('搜索食材价格错误:', error);
     res.status(400).json({ error: error.message });
   }
 });
@@ -53,7 +55,9 @@ router.post('/', auth, async (req, res) => {
     const existingPrice = await IngredientPrice.findOne({
       where: {
         userId: req.user.id,
-        ingredientName: ingredientName.trim()
+        ingredientName: {
+          [Op.like]: ingredientName.trim()
+        }
       }
     });
     

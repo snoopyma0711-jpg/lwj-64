@@ -46,10 +46,13 @@ const convertUnit = (amount, fromUnit) => {
 };
 
 const calculateItemPrice = async (userId, ingredientName, quantityStr) => {
+  const { Op } = require('sequelize');
   const priceRecord = await IngredientPrice.findOne({
     where: {
       userId,
-      ingredientName: ingredientName.toLowerCase()
+      ingredientName: {
+        [Op.like]: ingredientName
+      }
     }
   });
   

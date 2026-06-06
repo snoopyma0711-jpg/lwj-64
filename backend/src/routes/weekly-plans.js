@@ -1,5 +1,6 @@
 const express = require('express');
-const { WeeklyPlan, Recipe, ShoppingItem, WeeklyPlanRecipe, WeeklyExpense, Op } = require('../models');
+const { Op } = require('sequelize');
+const { WeeklyPlan, Recipe, ShoppingItem, WeeklyPlanRecipe, WeeklyExpense } = require('../models');
 const auth = require('../middleware/auth');
 const { calculateShoppingListPrices } = require('../utils/priceCalculator');
 
