@@ -85,11 +85,30 @@ const generateShoppingList = async (weeklyPlanId, recipes) => {
   return shoppingItems;
 };
 
-const getCollectionWithStats = async (collection, userId) => {
-  const recipes = await collection.getRecipes({
-    joinTableAttributes: ['sortOrder'],
-    order: [[RecipeCollectionRecipe, 'sortOrder', 'ASC']]
+const getRecipesForCollection = async (collectionId) => {
+  const relations = await RecipeCollectionRecipe.findAll({
+    where: { recipeCollectionId: collectionId },
+    order: [['sortOrder', 'ASC']]
   });
+  
+  const recipeIds = relations.map(r => r.recipeId);
+  
+  if (recipeIds.length === 0) {
+    return [];
+  }
+  
+  const recipes = await Recipe.findAll({
+    where: { id: recipeIds }
+  });
+  
+  const recipeMap = new Map();
+  recipes.forEach(r => recipeMap.set(r.id, r));
+  
+  return recipeIds.map(id => recipeMap.get(id)).filter(Boolean);
+};
+
+const getCollectionWithStats = async (collection, userId) => {
+  const recipes = await getRecipesForCollection(collection.id);
   
   const recipeCount = recipes.length;
   const totalTime = recipes.reduce((sum, r) => sum + r.estimatedTime, 0);
@@ -142,6 +161,7 @@ router.get('/', async (req, res) => {
     
     res.json(result);
   } catch (error) {
+    console.error('GET /collections error:', error);
     res.status(400).json({ error: error.message });
   }
 });
@@ -161,8 +181,6 @@ router.post('/', auth, async (req, res) => {
     });
     
     if (recipeIds && recipeIds.length > 0) {
-      const recipes = await Recipe.findAll({ where: { id: recipeIds } });
-      
       const recipeData = recipeIds.map((recipeId, index) => ({
         recipeCollectionId: collection.id,
         recipeId,
@@ -182,6 +200,7 @@ router.post('/', auth, async (req, res) => {
     
     res.status(201).json(result);
   } catch (error) {
+    console.error('POST /collections error:', error);
     res.status(400).json({ error: error.message });
   }
 });
@@ -203,6 +222,7 @@ router.get('/:id', async (req, res) => {
     
     res.json(result);
   } catch (error) {
+    console.error('GET /collections/:id error:', error);
     res.status(400).json({ error: error.message });
   }
 });
@@ -247,6 +267,7 @@ router.put('/:id', auth, async (req, res) => {
     
     res.json(result);
   } catch (error) {
+    console.error('PUT /collections/:id error:', error);
     res.status(400).json({ error: error.message });
   }
 });
@@ -286,6 +307,7 @@ router.put('/:id/reorder', auth, async (req, res) => {
     
     res.json(result);
   } catch (error) {
+    console.error('PUT /collections/:id/reorder error:', error);
     res.status(400).json({ error: error.message });
   }
 });
@@ -308,6 +330,7 @@ router.delete('/:id', auth, async (req, res) => {
     
     res.json({ message: '删除成功' });
   } catch (error) {
+    console.error('DELETE /collections/:id error:', error);
     res.status(400).json({ error: error.message });
   }
 });
@@ -336,10 +359,17 @@ router.post('/:id/favorite', auth, async (req, res) => {
     await collection.increment('favoriteCount');
     await collection.reload();
     
-    const result = await getCollectionWithStats(collection, req.user.id);
+    const collectionWithCreator = await RecipeCollection.findByPk(collection.id, {
+      include: [
+        { model: User, as: 'creator', attributes: ['id', 'username'] }
+      ]
+    });
+    
+    const result = await getCollectionWithStats(collectionWithCreator, req.user.id);
     
     res.json(result);
   } catch (error) {
+    console.error('POST /collections/:id/favorite error:', error);
     res.status(400).json({ error: error.message });
   }
 });
@@ -365,29 +395,27 @@ router.delete('/:id/favorite', auth, async (req, res) => {
     await collection.decrement('favoriteCount');
     await collection.reload();
     
-    const result = await getCollectionWithStats(collection, req.user.id);
+    const collectionWithCreator = await RecipeCollection.findByPk(collection.id, {
+      include: [
+        { model: User, as: 'creator', attributes: ['id', 'username'] }
+      ]
+    });
+    
+    const result = await getCollectionWithStats(collectionWithCreator, req.user.id);
     
     res.json(result);
   } catch (error) {
+    console.error('DELETE /collections/:id/favorite error:', error);
     res.status(400).json({ error: error.message });
   }
 });
 
 router.post('/:id/add-to-weekly-plan', auth, async (req, res) => {
   try {
-    const collection = await RecipeCollection.findByPk(req.params.id, {
-      include: [
-        {
-          model: Recipe,
-          as: 'recipes',
-          through: { attributes: ['sortOrder'] },
-          order: [[RecipeCollectionRecipe, 'sortOrder', 'ASC']]
-        }
-      ]
-    });
+    const recipes = await getRecipesForCollection(req.params.id);
     
-    if (!collection) {
-      return res.status(404).json({ error: '合集不存在' });
+    if (recipes.length === 0) {
+      return res.status(400).json({ error: '该合集没有菜谱' });
     }
     
     const { weekNumber, year } = getCurrentWeek();
@@ -404,7 +432,6 @@ router.post('/:id/add-to-weekly-plan', auth, async (req, res) => {
       });
     }
     
-    const recipes = collection.recipes;
     let addedCount = 0;
     
     for (const recipe of recipes) {
@@ -433,6 +460,7 @@ router.post('/:id/add-to-weekly-plan', auth, async (req, res) => {
       weeklyPlan: updatedPlan
     });
   } catch (error) {
+    console.error('POST /collections/:id/add-to-weekly-plan error:', error);
     res.status(400).json({ error: error.message });
   }
 });
