@@ -23,6 +23,26 @@ const IngredientPrice = sequelize.define('IngredientPrice', {
     validate: {
       isIn: [UNITS]
     }
+  },
+  calories: {
+    type: DataTypes.FLOAT,
+    allowNull: true,
+    comment: '热量密度（千卡/100克）'
+  },
+  protein: {
+    type: DataTypes.FLOAT,
+    allowNull: true,
+    comment: '蛋白质（克/100克）'
+  },
+  carbs: {
+    type: DataTypes.FLOAT,
+    allowNull: true,
+    comment: '碳水化合物（克/100克）'
+  },
+  fat: {
+    type: DataTypes.FLOAT,
+    allowNull: true,
+    comment: '脂肪（克/100克）'
   }
 });
 

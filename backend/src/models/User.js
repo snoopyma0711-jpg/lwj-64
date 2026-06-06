@@ -22,6 +22,12 @@ const User = sequelize.define('User', {
     validate: {
       notEmpty: true
     }
+  },
+  dailyCalorieGoal: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    defaultValue: 2000,
+    comment: '每日热量目标（千卡）'
   }
 });
 

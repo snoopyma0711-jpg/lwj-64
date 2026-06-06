@@ -25,7 +25,7 @@ router.post('/register', async (req, res) => {
 
     res.status(201).json({
       token,
-      user: { id: user.id, username: user.username }
+      user: { id: user.id, username: user.username, dailyCalorieGoal: user.dailyCalorieGoal }
     });
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -54,7 +54,7 @@ router.post('/login', async (req, res) => {
 
     res.json({
       token,
-      user: { id: user.id, username: user.username }
+      user: { id: user.id, username: user.username, dailyCalorieGoal: user.dailyCalorieGoal }
     });
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -63,8 +63,39 @@ router.post('/login', async (req, res) => {
 
 router.get('/me', auth, async (req, res) => {
   res.json({
-    user: { id: req.user.id, username: req.user.username }
+    user: { 
+      id: req.user.id, 
+      username: req.user.username,
+      dailyCalorieGoal: req.user.dailyCalorieGoal
+    }
   });
+});
+
+router.put('/calorie-goal', auth, async (req, res) => {
+  try {
+    const { dailyCalorieGoal } = req.body;
+    
+    if (dailyCalorieGoal === undefined || dailyCalorieGoal === null || isNaN(parseInt(dailyCalorieGoal))) {
+      return res.status(400).json({ error: '请输入有效的热量目标' });
+    }
+    
+    const goal = parseInt(dailyCalorieGoal);
+    if (goal < 500 || goal > 10000) {
+      return res.status(400).json({ error: '热量目标必须在500-10000千卡之间' });
+    }
+    
+    await req.user.update({ dailyCalorieGoal: goal });
+    
+    res.json({
+      user: {
+        id: req.user.id,
+        username: req.user.username,
+        dailyCalorieGoal: goal
+      }
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
 });
 
 module.exports = router;

@@ -1,8 +1,9 @@
 const express = require('express');
 const { Op } = require('sequelize');
-const { WeeklyPlan, Recipe, ShoppingItem, WeeklyPlanRecipe, WeeklyExpense } = require('../models');
+const { WeeklyPlan, Recipe, ShoppingItem, WeeklyPlanRecipe, WeeklyExpense, User } = require('../models');
 const auth = require('../middleware/auth');
 const { calculateShoppingListPrices } = require('../utils/priceCalculator');
+const { calculateWeeklyPlanNutrition, findReplacementRecipes } = require('../utils/nutritionCalculator');
 
 const router = express.Router();
 
@@ -111,6 +112,16 @@ router.get('/current', auth, async (req, res) => {
     planData.pricedItemCount = priceResult.pricedCount;
     planData.unpricedItemCount = priceResult.unpricedCount;
 
+    const nutrition = await calculateWeeklyPlanNutrition(req.user.id, planData.recipes || []);
+    planData.nutrition = nutrition;
+
+    const user = await User.findByPk(req.user.id, { attributes: ['id', 'username', 'dailyCalorieGoal'] });
+    planData.user = {
+      id: user.id,
+      username: user.username,
+      dailyCalorieGoal: user.dailyCalorieGoal
+    };
+
     res.json(planData);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -171,6 +182,16 @@ router.post('/add-recipe', auth, async (req, res) => {
     planData.pricedItemCount = priceResult.pricedCount;
     planData.unpricedItemCount = priceResult.unpricedCount;
 
+    const nutrition = await calculateWeeklyPlanNutrition(req.user.id, planData.recipes || []);
+    planData.nutrition = nutrition;
+
+    const user = await User.findByPk(req.user.id, { attributes: ['id', 'username', 'dailyCalorieGoal'] });
+    planData.user = {
+      id: user.id,
+      username: user.username,
+      dailyCalorieGoal: user.dailyCalorieGoal
+    };
+
     res.json(planData);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -214,6 +235,134 @@ router.post('/remove-recipe', auth, async (req, res) => {
     planData.totalEstimatedPrice = priceResult.totalPrice;
     planData.pricedItemCount = priceResult.pricedCount;
     planData.unpricedItemCount = priceResult.unpricedCount;
+
+    const nutrition = await calculateWeeklyPlanNutrition(req.user.id, planData.recipes || []);
+    planData.nutrition = nutrition;
+
+    const user = await User.findByPk(req.user.id, { attributes: ['id', 'username', 'dailyCalorieGoal'] });
+    planData.user = {
+      id: user.id,
+      username: user.username,
+      dailyCalorieGoal: user.dailyCalorieGoal
+    };
+
+    res.json(planData);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.get('/nutrition', auth, async (req, res) => {
+  try {
+    const { weekNumber, year } = getCurrentWeek();
+
+    const weeklyPlan = await WeeklyPlan.findOne({
+      where: { userId: req.user.id, weekNumber, year },
+      include: [
+        { model: Recipe, as: 'recipes' }
+      ]
+    });
+
+    if (!weeklyPlan) {
+      return res.json({
+        totalWeeklyCalories: 0,
+        dailyAverageCalories: 0,
+        macroRatios: { protein: 0, carbs: 0, fat: 0 },
+        recipeNutrition: [],
+        totalRecipes: 0
+      });
+    }
+
+    const nutrition = await calculateWeeklyPlanNutrition(req.user.id, weeklyPlan.recipes || []);
+    
+    const user = await User.findByPk(req.user.id, { attributes: ['dailyCalorieGoal'] });
+    
+    res.json({
+      ...nutrition,
+      dailyCalorieGoal: user.dailyCalorieGoal
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.get('/replacement-suggestions/:recipeId', auth, async (req, res) => {
+  try {
+    const { recipeId } = req.params;
+    
+    const recipeToReplace = await Recipe.findByPk(recipeId);
+    if (!recipeToReplace) {
+      return res.status(404).json({ error: '菜谱不存在' });
+    }
+
+    const allRecipes = await Recipe.findAll({
+      where: {
+        id: { [Op.ne]: recipeId }
+      }
+    });
+
+    const suggestions = await findReplacementRecipes(req.user.id, recipeToReplace, allRecipes);
+    
+    res.json(suggestions);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.post('/replace-recipe', auth, async (req, res) => {
+  try {
+    const { oldRecipeId, newRecipeId } = req.body;
+    const { weekNumber, year } = getCurrentWeek();
+
+    if (!oldRecipeId || !newRecipeId) {
+      return res.status(400).json({ error: '请提供要替换的菜谱ID和新菜谱ID' });
+    }
+
+    const weeklyPlan = await WeeklyPlan.findOne({
+      where: { userId: req.user.id, weekNumber, year }
+    });
+
+    if (!weeklyPlan) {
+      return res.status(404).json({ error: '本周计划不存在' });
+    }
+
+    const oldRecipe = await Recipe.findByPk(oldRecipeId);
+    const newRecipe = await Recipe.findByPk(newRecipeId);
+
+    if (!oldRecipe || !newRecipe) {
+      return res.status(404).json({ error: '菜谱不存在' });
+    }
+
+    await weeklyPlan.removeRecipe(oldRecipe);
+    await weeklyPlan.addRecipe(newRecipe);
+
+    const recipes = await weeklyPlan.getRecipes();
+    await generateShoppingList(weeklyPlan.id, recipes);
+
+    const updatedPlan = await WeeklyPlan.findByPk(weeklyPlan.id, {
+      include: [
+        { model: Recipe, as: 'recipes' },
+        { model: ShoppingItem, as: 'shoppingItems', order: [['createdAt', 'ASC']] }
+      ]
+    });
+
+    const planData = updatedPlan.toJSON();
+    const priceResult = await calculateShoppingListPrices(req.user.id, planData.shoppingItems || []);
+    
+    planData.shoppingItems = priceResult.items;
+    planData.totalEstimatedPrice = priceResult.totalPrice;
+    planData.pricedItemCount = priceResult.pricedCount;
+    planData.unpricedItemCount = priceResult.unpricedCount;
+
+    const nutrition = await calculateWeeklyPlanNutrition(req.user.id, planData.recipes || []);
+    planData.nutrition = nutrition;
+
+    const user = await User.findByPk(req.user.id, { attributes: ['id', 'username', 'dailyCalorieGoal'] });
+    planData.user = {
+      id: user.id,
+      username: user.username,
+      dailyCalorieGoal: user.dailyCalorieGoal
+    };
 
     res.json(planData);
   } catch (error) {

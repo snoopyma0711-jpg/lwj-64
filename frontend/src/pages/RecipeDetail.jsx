@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Card, Typography, Tag, Rate, Button, Space, List, Avatar, Modal, Form, Input, message, Divider, Popconfirm, Row, Col } from 'antd';
-import { ClockCircleOutlined, UserOutlined, FireOutlined, EditOutlined, DeleteOutlined, ShoppingOutlined, StarOutlined } from '@ant-design/icons';
+import { Card, Typography, Tag, Rate, Button, Space, List, Avatar, Modal, Form, Input, message, Divider, Popconfirm, Row, Col, Progress, Tooltip, Statistic } from 'antd';
+import { ClockCircleOutlined, UserOutlined, FireOutlined, EditOutlined, DeleteOutlined, ShoppingOutlined, StarOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip as RechartsTooltip } from 'recharts';
 import { useParams, useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import request from '../api/request';
@@ -171,18 +172,217 @@ const RecipeDetail = () => {
             <Card title="🥬 所需食材" size="small">
               <List
                 dataSource={recipe.ingredients}
-                renderItem={(ing, index) => (
-                  <List.Item key={index}>
-                    <Space>
-                      <Text strong>{ing.name}</Text>
-                      <Text type="secondary">{ing.quantity}</Text>
-                    </Space>
-                  </List.Item>
-                )}
+                renderItem={(ing, index) => {
+                  const ingNutrition = recipe.nutrition?.ingredientNutrition?.[index];
+                  return (
+                    <List.Item key={index}>
+                      <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+                        <Space>
+                          <Text strong>{ing.name}</Text>
+                          <Text type="secondary">{ing.quantity}</Text>
+                        </Space>
+                        {ingNutrition?.hasNutritionData && (
+                          <Tag color="orange" style={{ margin: 0 }}>
+                            <FireOutlined /> {ingNutrition.calories} 千卡
+                          </Tag>
+                        )}
+                      </Space>
+                    </List.Item>
+                  );
+                }}
               />
+              {recipe.nutrition && recipe.nutrition.totalIngredients > 0 && (
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
+                  <Row gutter={8}>
+                    <Col span={12}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        营养数据完整度:
+                      </Text>
+                    </Col>
+                    <Col span={12} style={{ textAlign: 'right' }}>
+                      <Tag color={recipe.nutrition.hasCompleteData ? 'green' : 'warning'}>
+                        {recipe.nutrition.ingredientsWithData}/{recipe.nutrition.totalIngredients} 项
+                      </Tag>
+                    </Col>
+                  </Row>
+                  {!recipe.nutrition.hasCompleteData && (
+                    <Text type="secondary" style={{ fontSize: 12, marginTop: 4, display: 'block' }}>
+                      <InfoCircleOutlined /> 部分食材缺少营养数据，请到「食材价格库」补充
+                    </Text>
+                  )}
+                </div>
+              )}
             </Card>
           </Col>
           <Col xs={24} md={14}>
+            {recipe.nutrition && (
+              <Card 
+                title={
+                  <Space>
+                    <FireOutlined style={{ color: '#fa8c16' }} />
+                    <span>📊 营养估算</span>
+                    {!recipe.nutrition.hasCompleteData && (
+                      <Tooltip title="部分食材缺少营养数据，估算仅供参考">
+                        <Tag color="warning" style={{ marginLeft: 8 }}>
+                          估算
+                        </Tag>
+                      </Tooltip>
+                    )}
+                  </Space>
+                } 
+                size="small"
+                style={{ marginBottom: 16 }}
+              >
+                <Row gutter={[16, 16]}>
+                  <Col xs={12} sm={6}>
+                    <Statistic 
+                      title={<><FireOutlined style={{ color: '#fa8c16' }} /> 总热量</>}
+                      value={recipe.nutrition.totalCalories}
+                      suffix="千卡"
+                      valueStyle={{ color: '#fa8c16', fontSize: 20 }}
+                    />
+                  </Col>
+                  <Col xs={12} sm={6}>
+                    <Statistic 
+                      title="每份热量"
+                      value={recipe.nutrition.caloriesPerServing}
+                      suffix="千卡"
+                      valueStyle={{ fontSize: 20 }}
+                    />
+                  </Col>
+                  <Col xs={12} sm={6}>
+                    <Statistic 
+                      title="建议份数"
+                      value={recipe.nutrition.servingSize}
+                      suffix="份"
+                      valueStyle={{ fontSize: 20 }}
+                    />
+                  </Col>
+                  <Col xs={12} sm={6}>
+                    <Statistic 
+                      title="蛋白质"
+                      value={recipe.nutrition.totalProtein}
+                      suffix="克"
+                      valueStyle={{ color: '#1890ff', fontSize: 20 }}
+                    />
+                  </Col>
+                </Row>
+                
+                <Divider style={{ margin: '12px 0' }} />
+                
+                <Row gutter={[16, 16]} align="middle">
+                  <Col xs={24} sm={10}>
+                    <div style={{ height: 180 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={[
+                              { name: '蛋白质', value: recipe.nutrition.macroRatios.protein, color: '#1890ff' },
+                              { name: '碳水', value: recipe.nutrition.macroRatios.carbs, color: '#52c41a' },
+                              { name: '脂肪', value: recipe.nutrition.macroRatios.fat, color: '#fa8c16' }
+                            ].filter(d => d.value > 0)}
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={60}
+                            innerRadius={30}
+                            dataKey="value"
+                            label={({ name, value }) => `${value}%`}
+                          >
+                            {[
+                              { name: '蛋白质', value: recipe.nutrition.macroRatios.protein, color: '#1890ff' },
+                              { name: '碳水', value: recipe.nutrition.macroRatios.carbs, color: '#52c41a' },
+                              { name: '脂肪', value: recipe.nutrition.macroRatios.fat, color: '#fa8c16' }
+                            ].filter(d => d.value > 0).map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <RechartsTooltip formatter={(value) => `${value}%`} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </Col>
+                  <Col xs={24} sm={14}>
+                    <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                      <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+                        <Space>
+                          <div style={{ width: 12, height: 12, background: '#1890ff', borderRadius: 2 }} />
+                          <Text>蛋白质</Text>
+                        </Space>
+                        <Space>
+                          <Progress 
+                            percent={recipe.nutrition.macroRatios.protein} 
+                            size="small" 
+                            strokeColor="#1890ff"
+                            showInfo={false}
+                            style={{ width: 100 }}
+                          />
+                          <Text strong>{recipe.nutrition.macroRatios.protein}%</Text>
+                        </Space>
+                      </Space>
+                      <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+                        <Space>
+                          <div style={{ width: 12, height: 12, background: '#52c41a', borderRadius: 2 }} />
+                          <Text>碳水化合物</Text>
+                        </Space>
+                        <Space>
+                          <Progress 
+                            percent={recipe.nutrition.macroRatios.carbs} 
+                            size="small" 
+                            strokeColor="#52c41a"
+                            showInfo={false}
+                            style={{ width: 100 }}
+                          />
+                          <Text strong>{recipe.nutrition.macroRatios.carbs}%</Text>
+                        </Space>
+                      </Space>
+                      <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+                        <Space>
+                          <div style={{ width: 12, height: 12, background: '#fa8c16', borderRadius: 2 }} />
+                          <Text>脂肪</Text>
+                        </Space>
+                        <Space>
+                          <Progress 
+                            percent={recipe.nutrition.macroRatios.fat} 
+                            size="small" 
+                            strokeColor="#fa8c16"
+                            showInfo={false}
+                            style={{ width: 100 }}
+                          />
+                          <Text strong>{recipe.nutrition.macroRatios.fat}%</Text>
+                        </Space>
+                      </Space>
+                    </Space>
+                    <Divider style={{ margin: '12px 0' }} />
+                    <Row gutter={8}>
+                      <Col span={8}>
+                        <div style={{ textAlign: 'center' }}>
+                          <Text type="secondary" style={{ fontSize: 12 }}>蛋白质</Text>
+                          <div style={{ fontSize: 16, fontWeight: 'bold', color: '#1890ff' }}>
+                            {recipe.nutrition.totalProtein}g
+                          </div>
+                        </div>
+                      </Col>
+                      <Col span={8}>
+                        <div style={{ textAlign: 'center' }}>
+                          <Text type="secondary" style={{ fontSize: 12 }}>碳水</Text>
+                          <div style={{ fontSize: 16, fontWeight: 'bold', color: '#52c41a' }}>
+                            {recipe.nutrition.totalCarbs}g
+                          </div>
+                        </div>
+                      </Col>
+                      <Col span={8}>
+                        <div style={{ textAlign: 'center' }}>
+                          <Text type="secondary" style={{ fontSize: 12 }}>脂肪</Text>
+                          <div style={{ fontSize: 16, fontWeight: 'bold', color: '#fa8c16' }}>
+                            {recipe.nutrition.totalFat}g
+                          </div>
+                        </div>
+                      </Col>
+                    </Row>
+                  </Col>
+                </Row>
+              </Card>
+            )}
             <Card title="👨‍🍳 烹饪步骤" size="small">
               <Paragraph style={{ whiteSpace: 'pre-wrap', lineHeight: 1.8 }}>
                 {recipe.steps}

@@ -2,12 +2,13 @@ const express = require('express');
 const { Op } = require('sequelize');
 const { Recipe, User, Rating } = require('../models');
 const auth = require('../middleware/auth');
+const { calculateRecipeNutrition } = require('../utils/nutritionCalculator');
 
 const router = express.Router();
 
-router.get('/', async (req, res) => {
+router.get('/', auth, async (req, res) => {
   try {
-    const { search, sortBy, ingredients } = req.query;
+    const { search, sortBy, ingredients, includeNutrition } = req.query;
     
     let where = {};
     
@@ -41,7 +42,33 @@ router.get('/', async (req, res) => {
       recipes.sort((a, b) => a.missingCount - b.missingCount);
     }
 
+    if (includeNutrition === 'true') {
+      const recipesWithNutrition = [];
+      for (const recipe of recipes) {
+        const recipeData = recipe.toJSON ? recipe.toJSON() : recipe;
+        const nutrition = await calculateRecipeNutrition(req.user.id, recipeData);
+        recipesWithNutrition.push({ ...recipeData, nutrition });
+      }
+      res.json(recipesWithNutrition);
+      return;
+    }
+
     res.json(recipes);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.get('/:id/nutrition', auth, async (req, res) => {
+  try {
+    const recipe = await Recipe.findByPk(req.params.id);
+    
+    if (!recipe) {
+      return res.status(404).json({ error: '菜谱不存在' });
+    }
+    
+    const nutrition = await calculateRecipeNutrition(req.user.id, recipe);
+    res.json(nutrition);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -78,7 +105,7 @@ router.post('/', auth, async (req, res) => {
   }
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', auth, async (req, res) => {
   try {
     const recipe = await Recipe.findByPk(req.params.id, {
       include: [
@@ -96,7 +123,11 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: '菜谱不存在' });
     }
 
-    res.json(recipe);
+    const recipeData = recipe.toJSON();
+    const nutrition = await calculateRecipeNutrition(req.user.id, recipe);
+    recipeData.nutrition = nutrition;
+
+    res.json(recipeData);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
