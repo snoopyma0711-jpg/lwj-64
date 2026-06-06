@@ -1,0 +1,24 @@
+{
+  "name": "recipe-workshop-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 5173"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.21.1",
+    "antd": "^5.12.8",
+    "@ant-design/icons": "^5.2.6",
+    "axios": "^1.6.5",
+    "dayjs": "^1.11.10"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.1",
+    "vite": "^5.0.10"
+  }
+}

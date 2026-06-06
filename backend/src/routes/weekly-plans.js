@@ -1,0 +1,248 @@
+const express = require('express');
+const { WeeklyPlan, Recipe, ShoppingItem, WeeklyPlanRecipe } = require('../models');
+const auth = require('../middleware/auth');
+
+const router = express.Router();
+
+const getCurrentWeek = () => {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), 0, 1);
+  const diff = now - start;
+  const oneWeek = 1000 * 60 * 60 * 24 * 7;
+  const weekNumber = Math.ceil(diff / oneWeek);
+  return { weekNumber, year: now.getFullYear() };
+};
+
+const parseQuantity = (quantityStr) => {
+  const match = quantityStr.match(/([\d.]+)\s*(.*)/);
+  if (match) {
+    return { amount: parseFloat(match[1]), unit: match[2] || '' };
+  }
+  return { amount: 1, unit: quantityStr || '' };
+};
+
+const formatQuantity = (amount, unit) => {
+  if (unit) {
+    return `${amount} ${unit}`;
+  }
+  return `${amount}`;
+};
+
+const generateShoppingList = async (weeklyPlanId, recipes) => {
+  await ShoppingItem.destroy({ where: { weeklyPlanId } });
+
+  const ingredientMap = new Map();
+
+  for (const recipe of recipes) {
+    for (const ing of recipe.ingredients) {
+      const key = ing.name.toLowerCase();
+      const parsed = parseQuantity(ing.quantity);
+      
+      if (ingredientMap.has(key)) {
+        const existing = ingredientMap.get(key);
+        if (existing.unit === parsed.unit) {
+          existing.amount += parsed.amount;
+        } else {
+          existing.others.push({ amount: parsed.amount, unit: parsed.unit });
+        }
+      } else {
+        ingredientMap.set(key, {
+          name: ing.name,
+          amount: parsed.amount,
+          unit: parsed.unit,
+          others: []
+        });
+      }
+    }
+  }
+
+  const shoppingItems = [];
+  for (const item of ingredientMap.values()) {
+    let quantity = formatQuantity(item.amount, item.unit);
+    for (const other of item.others) {
+      quantity += ` + ${formatQuantity(other.amount, other.unit)}`;
+    }
+    
+    const shoppingItem = await ShoppingItem.create({
+      weeklyPlanId,
+      ingredientName: item.name,
+      quantity,
+      purchased: false
+    });
+    shoppingItems.push(shoppingItem);
+  }
+
+  return shoppingItems;
+};
+
+router.get('/current', auth, async (req, res) => {
+  try {
+    const { weekNumber, year } = getCurrentWeek();
+
+    let weeklyPlan = await WeeklyPlan.findOne({
+      where: { userId: req.user.id, weekNumber, year },
+      include: [
+        { model: Recipe, as: 'recipes' },
+        { model: ShoppingItem, as: 'shoppingItems', order: [['createdAt', 'ASC']] }
+      ]
+    });
+
+    if (!weeklyPlan) {
+      weeklyPlan = await WeeklyPlan.create({
+        userId: req.user.id,
+        weekNumber,
+        year
+      });
+      weeklyPlan = await WeeklyPlan.findByPk(weeklyPlan.id, {
+        include: [
+          { model: Recipe, as: 'recipes' },
+          { model: ShoppingItem, as: 'shoppingItems', order: [['createdAt', 'ASC']] }
+        ]
+      });
+    }
+
+    res.json(weeklyPlan);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.post('/add-recipe', auth, async (req, res) => {
+  try {
+    const { recipeId } = req.body;
+    const { weekNumber, year } = getCurrentWeek();
+
+    if (!recipeId) {
+      return res.status(400).json({ error: '请提供菜谱ID' });
+    }
+
+    const recipe = await Recipe.findByPk(recipeId);
+    if (!recipe) {
+      return res.status(404).json({ error: '菜谱不存在' });
+    }
+
+    let weeklyPlan = await WeeklyPlan.findOne({
+      where: { userId: req.user.id, weekNumber, year }
+    });
+
+    if (!weeklyPlan) {
+      weeklyPlan = await WeeklyPlan.create({
+        userId: req.user.id,
+        weekNumber,
+        year
+      });
+    }
+
+    const existing = await WeeklyPlanRecipe.findOne({
+      where: { weeklyPlanId: weeklyPlan.id, recipeId }
+    });
+
+    if (existing) {
+      return res.status(400).json({ error: '该菜谱已在本周计划中' });
+    }
+
+    await weeklyPlan.addRecipe(recipe);
+
+    const recipes = await weeklyPlan.getRecipes();
+    await generateShoppingList(weeklyPlan.id, recipes);
+
+    const updatedPlan = await WeeklyPlan.findByPk(weeklyPlan.id, {
+      include: [
+        { model: Recipe, as: 'recipes' },
+        { model: ShoppingItem, as: 'shoppingItems', order: [['createdAt', 'ASC']] }
+      ]
+    });
+
+    res.json(updatedPlan);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.post('/remove-recipe', auth, async (req, res) => {
+  try {
+    const { recipeId } = req.body;
+    const { weekNumber, year } = getCurrentWeek();
+
+    const weeklyPlan = await WeeklyPlan.findOne({
+      where: { userId: req.user.id, weekNumber, year }
+    });
+
+    if (!weeklyPlan) {
+      return res.status(404).json({ error: '本周计划不存在' });
+    }
+
+    const recipe = await Recipe.findByPk(recipeId);
+    if (!recipe) {
+      return res.status(404).json({ error: '菜谱不存在' });
+    }
+
+    await weeklyPlan.removeRecipe(recipe);
+
+    const recipes = await weeklyPlan.getRecipes();
+    await generateShoppingList(weeklyPlan.id, recipes);
+
+    const updatedPlan = await WeeklyPlan.findByPk(weeklyPlan.id, {
+      include: [
+        { model: Recipe, as: 'recipes' },
+        { model: ShoppingItem, as: 'shoppingItems', order: [['createdAt', 'ASC']] }
+      ]
+    });
+
+    res.json(updatedPlan);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.put('/shopping-item/:id', auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { purchased } = req.body;
+
+    const shoppingItem = await ShoppingItem.findByPk(id);
+    if (!shoppingItem) {
+      return res.status(404).json({ error: '购物项不存在' });
+    }
+
+    const weeklyPlan = await WeeklyPlan.findByPk(shoppingItem.weeklyPlanId);
+    if (!weeklyPlan || weeklyPlan.userId !== req.user.id) {
+      return res.status(403).json({ error: '无权修改此购物项' });
+    }
+
+    await shoppingItem.update({ purchased });
+    res.json(shoppingItem);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.delete('/clear', auth, async (req, res) => {
+  try {
+    const { weekNumber, year } = getCurrentWeek();
+
+    const weeklyPlan = await WeeklyPlan.findOne({
+      where: { userId: req.user.id, weekNumber, year }
+    });
+
+    if (!weeklyPlan) {
+      return res.json({ message: '本周计划为空' });
+    }
+
+    await WeeklyPlanRecipe.destroy({ where: { weeklyPlanId: weeklyPlan.id } });
+    await ShoppingItem.destroy({ where: { weeklyPlanId: weeklyPlan.id } });
+
+    const updatedPlan = await WeeklyPlan.findByPk(weeklyPlan.id, {
+      include: [
+        { model: Recipe, as: 'recipes' },
+        { model: ShoppingItem, as: 'shoppingItems', order: [['createdAt', 'ASC']] }
+      ]
+    });
+
+    res.json(updatedPlan);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+module.exports = router;
