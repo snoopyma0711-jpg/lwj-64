@@ -5,6 +5,7 @@ const authRoutes = require('./routes/auth');
 const recipeRoutes = require('./routes/recipes');
 const ratingRoutes = require('./routes/ratings');
 const weeklyPlanRoutes = require('./routes/weekly-plans');
+const collectionRoutes = require('./routes/collections');
 require('dotenv').config();
 
 const app = express();
@@ -17,6 +18,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/recipes', recipeRoutes);
 app.use('/api/ratings', ratingRoutes);
 app.use('/api/weekly-plans', weeklyPlanRoutes);
+app.use('/api/collections', collectionRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: '菜谱工坊系统运行正常' });

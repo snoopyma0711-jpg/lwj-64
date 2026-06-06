@@ -1,6 +1,6 @@
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Layout, Menu, Dropdown, Avatar, Button, Space } from 'antd';
-import { UserOutlined, LogoutOutlined, PlusOutlined, UnorderedListOutlined, CalendarOutlined } from '@ant-design/icons';
+import { UserOutlined, LogoutOutlined, PlusOutlined, UnorderedListOutlined, CalendarOutlined, AppstoreOutlined } from '@ant-design/icons';
 import { useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -8,6 +8,9 @@ import RecipeList from './pages/RecipeList';
 import RecipeDetail from './pages/RecipeDetail';
 import CreateRecipe from './pages/CreateRecipe';
 import WeeklyPlan from './pages/WeeklyPlan';
+import CollectionList from './pages/CollectionList';
+import CreateCollection from './pages/CreateCollection';
+import CollectionDetail from './pages/CollectionDetail';
 import { Link, useLocation } from 'react-router-dom';
 
 const { Header, Content, Footer } = Layout;
@@ -50,6 +53,11 @@ const AppLayout = ({ children }) => {
       key: '/recipes',
       icon: <UnorderedListOutlined />,
       label: <Link to="/recipes">菜谱列表</Link>
+    },
+    {
+      key: '/collections',
+      icon: <AppstoreOutlined />,
+      label: <Link to="/collections">菜谱合集</Link>
     },
     {
       key: '/create',
@@ -107,6 +115,10 @@ const App = () => {
       <Route path="/recipes/:id" element={<PrivateRoute><AppLayout><RecipeDetail /></AppLayout></PrivateRoute>} />
       <Route path="/create" element={<PrivateRoute><AppLayout><CreateRecipe /></AppLayout></PrivateRoute>} />
       <Route path="/edit/:id" element={<PrivateRoute><AppLayout><CreateRecipe /></AppLayout></PrivateRoute>} />
+      <Route path="/collections" element={<PrivateRoute><AppLayout><CollectionList /></AppLayout></PrivateRoute>} />
+      <Route path="/collections/create" element={<PrivateRoute><AppLayout><CreateCollection /></AppLayout></PrivateRoute>} />
+      <Route path="/collections/edit/:id" element={<PrivateRoute><AppLayout><CreateCollection /></AppLayout></PrivateRoute>} />
+      <Route path="/collections/:id" element={<PrivateRoute><AppLayout><CollectionDetail /></AppLayout></PrivateRoute>} />
       <Route path="/weekly-plan" element={<PrivateRoute><AppLayout><WeeklyPlan /></AppLayout></PrivateRoute>} />
       <Route path="/" element={<Navigate to="/recipes" />} />
       <Route path="*" element={<Navigate to="/recipes" />} />
