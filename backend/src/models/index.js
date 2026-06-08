@@ -10,6 +10,7 @@ const RecipeCollectionRecipe = require('./RecipeCollectionRecipe');
 const RecipeCollectionFavorite = require('./RecipeCollectionFavorite');
 const IngredientPrice = require('./IngredientPrice');
 const WeeklyExpense = require('./WeeklyExpense');
+const FridgeIngredient = require('./FridgeIngredient');
 
 Recipe.belongsTo(User, { as: 'creator', foreignKey: 'creatorId' });
 User.hasMany(Recipe, { as: 'recipes', foreignKey: 'creatorId' });
@@ -63,6 +64,9 @@ User.hasMany(IngredientPrice, { as: 'ingredientPrices', foreignKey: 'userId' });
 WeeklyExpense.belongsTo(User, { as: 'user', foreignKey: 'userId' });
 User.hasMany(WeeklyExpense, { as: 'weeklyExpenses', foreignKey: 'userId' });
 
+FridgeIngredient.belongsTo(User, { as: 'user', foreignKey: 'userId' });
+User.hasMany(FridgeIngredient, { as: 'fridgeIngredients', foreignKey: 'userId' });
+
 module.exports = {
   sequelize,
   User,
@@ -75,5 +79,6 @@ module.exports = {
   RecipeCollectionRecipe,
   RecipeCollectionFavorite,
   IngredientPrice,
-  WeeklyExpense
+  WeeklyExpense,
+  FridgeIngredient
 };

@@ -8,6 +8,7 @@ const weeklyPlanRoutes = require('./routes/weekly-plans');
 const collectionRoutes = require('./routes/collections');
 const ingredientPriceRoutes = require('./routes/ingredient-prices');
 const expenseRoutes = require('./routes/expenses');
+const fridgeRoutes = require('./routes/fridge');
 require('dotenv').config();
 
 const app = express();
@@ -23,6 +24,7 @@ app.use('/api/weekly-plans', weeklyPlanRoutes);
 app.use('/api/collections', collectionRoutes);
 app.use('/api/ingredient-prices', ingredientPriceRoutes);
 app.use('/api/expenses', expenseRoutes);
+app.use('/api/fridge', fridgeRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: '菜谱工坊系统运行正常' });

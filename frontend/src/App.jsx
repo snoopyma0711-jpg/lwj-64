@@ -1,6 +1,6 @@
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Layout, Menu, Dropdown, Avatar, Button, Space } from 'antd';
-import { UserOutlined, LogoutOutlined, PlusOutlined, UnorderedListOutlined, CalendarOutlined, AppstoreOutlined, TagOutlined, LineChartOutlined } from '@ant-design/icons';
+import { UserOutlined, LogoutOutlined, PlusOutlined, UnorderedListOutlined, CalendarOutlined, AppstoreOutlined, TagOutlined, LineChartOutlined, InboxOutlined } from '@ant-design/icons';
 import { useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -13,6 +13,8 @@ import CreateCollection from './pages/CreateCollection';
 import CollectionDetail from './pages/CollectionDetail';
 import IngredientPriceManager from './pages/IngredientPriceManager';
 import ExpenseTrend from './pages/ExpenseTrend';
+import FridgeManager from './pages/FridgeManager';
+import ExpiryAlertBanner from './components/ExpiryAlertBanner';
 import { Link, useLocation } from 'react-router-dom';
 
 const { Header, Content, Footer } = Layout;
@@ -72,6 +74,11 @@ const AppLayout = ({ children }) => {
       label: <Link to="/weekly-plan">周计划 & 购物清单</Link>
     },
     {
+      key: '/fridge',
+      icon: <InboxOutlined />,
+      label: <Link to="/fridge">冰箱食材</Link>
+    },
+    {
       key: '/ingredient-prices',
       icon: <TagOutlined />,
       label: <Link to="/ingredient-prices">食材价格库</Link>
@@ -109,6 +116,7 @@ const AppLayout = ({ children }) => {
         </div>
       </Header>
       <Content style={{ padding: '24px', maxWidth: 1200, width: '100%', margin: '0 auto' }}>
+        <ExpiryAlertBanner />
         {children}
       </Content>
       <Footer style={{ textAlign: 'center', background: '#fff' }}>
@@ -132,6 +140,7 @@ const App = () => {
       <Route path="/collections/edit/:id" element={<PrivateRoute><AppLayout><CreateCollection /></AppLayout></PrivateRoute>} />
       <Route path="/collections/:id" element={<PrivateRoute><AppLayout><CollectionDetail /></AppLayout></PrivateRoute>} />
       <Route path="/weekly-plan" element={<PrivateRoute><AppLayout><WeeklyPlan /></AppLayout></PrivateRoute>} />
+      <Route path="/fridge" element={<PrivateRoute><AppLayout><FridgeManager /></AppLayout></PrivateRoute>} />
       <Route path="/ingredient-prices" element={<PrivateRoute><AppLayout><IngredientPriceManager /></AppLayout></PrivateRoute>} />
       <Route path="/expense-trend" element={<PrivateRoute><AppLayout><ExpenseTrend /></AppLayout></PrivateRoute>} />
       <Route path="/" element={<Navigate to="/recipes" />} />

@@ -59,3 +59,32 @@ export const getRecipeNutrition = (recipeId) => {
 export const getRecipesWithNutrition = () => {
   return request.get('/recipes', { params: { includeNutrition: 'true' } });
 };
+
+export const getFridgeIngredients = (status) => {
+  const params = status ? { status } : {};
+  return request.get('/fridge', { params });
+};
+
+export const getFridgeAlerts = () => {
+  return request.get('/fridge/alerts');
+};
+
+export const addFridgeIngredient = (data) => {
+  return request.post('/fridge', data);
+};
+
+export const updateFridgeIngredient = (id, data) => {
+  return request.put(`/fridge/${id}`, data);
+};
+
+export const deleteFridgeIngredient = (id) => {
+  return request.delete(`/fridge/${id}`);
+};
+
+export const deleteFridgeIngredients = (ids) => {
+  return request.delete('/fridge', { data: { ids } });
+};
+
+export const checkDuplicateIngredients = () => {
+  return request.get('/weekly-plans/check-duplicate-ingredients');
+};

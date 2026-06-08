@@ -5,7 +5,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip as RechartsTo
 import request from '../api/request';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getReplacementSuggestions, replaceRecipe, updateCalorieGoal } from '../api/budget';
+import { getReplacementSuggestions, replaceRecipe, updateCalorieGoal, checkDuplicateIngredients } from '../api/budget';
 
 const { Title, Text } = Typography;
 
@@ -36,6 +36,9 @@ const WeeklyPlan = () => {
   const [replacementSuggestions, setReplacementSuggestions] = useState([]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [recipeNutritionMap, setRecipeNutritionMap] = useState({});
+  const [duplicateModalVisible, setDuplicateModalVisible] = useState(false);
+  const [duplicateIngredients, setDuplicateIngredients] = useState([]);
+  const [selectedDuplicateIds, setSelectedDuplicateIds] = useState([]);
 
   const fetchWeeklyPlan = async () => {
     setLoading(true);
@@ -84,12 +87,42 @@ const WeeklyPlan = () => {
 
   const handleClearPlan = async () => {
     try {
-      await request.delete('/weekly-plans/clear');
+      const response = await checkDuplicateIngredients();
+      const duplicates = response.data.duplicates || [];
+      
+      if (duplicates.length > 0) {
+        setDuplicateIngredients(duplicates);
+        setSelectedDuplicateIds(duplicates.map(d => d.shoppingItemId));
+        setDuplicateModalVisible(true);
+      } else {
+        await doClearPlan([]);
+      }
+    } catch (error) {
+      message.error('检查重复食材失败');
+    }
+  };
+
+  const doClearPlan = async (excludeShoppingItemIds) => {
+    try {
+      await request.delete('/weekly-plans/clear', {
+        data: { excludeShoppingItemIds }
+      });
       message.success('已清空本周计划，花销已自动记录');
       fetchWeeklyPlan();
+      setDuplicateModalVisible(false);
+      setDuplicateIngredients([]);
+      setSelectedDuplicateIds([]);
     } catch (error) {
       message.error('清空失败');
     }
+  };
+
+  const handleRemoveDuplicatesAndClear = () => {
+    doClearPlan(selectedDuplicateIds);
+  };
+
+  const handleIgnoreAndClear = () => {
+    doClearPlan([]);
   };
 
   const handleGoalSubmit = async (values) => {
@@ -939,6 +972,107 @@ const WeeklyPlan = () => {
           />
         )}
       </Drawer>
+
+      <Modal
+        title={
+          <Space>
+            <WarningOutlined style={{ color: '#faad14', fontSize: 20 }} />
+            <span>发现重复食材</span>
+          </Space>
+        }
+        open={duplicateModalVisible}
+        onCancel={() => {
+          setDuplicateModalVisible(false);
+          setDuplicateIngredients([]);
+          setSelectedDuplicateIds([]);
+        }}
+        footer={null}
+        destroyOnClose
+        width={520}
+      >
+        <div style={{ marginBottom: 16, padding: 12, background: '#fffbe6', borderRadius: 8, border: '1px solid #ffe58f' }}>
+          <Text type="secondary" style={{ fontSize: 13 }}>
+            <WarningOutlined style={{ color: '#faad14', marginRight: 4 }} />
+            冰箱里还有以下食材，与购物清单中的采购计划重复：
+          </Text>
+        </div>
+
+        <List
+          dataSource={duplicateIngredients}
+          renderItem={(item) => (
+            <List.Item
+              style={{ 
+                padding: '12px 0', 
+                borderBottom: '1px solid #f0f0f0',
+                background: selectedDuplicateIds.includes(item.shoppingItemId) ? '#f6ffed' : '#fff'
+              }}
+            >
+              <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+                <Space>
+                  <Checkbox 
+                    checked={selectedDuplicateIds.includes(item.shoppingItemId)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedDuplicateIds([...selectedDuplicateIds, item.shoppingItemId]);
+                      } else {
+                        setSelectedDuplicateIds(selectedDuplicateIds.filter(id => id !== item.shoppingItemId));
+                      }
+                    }}
+                  />
+                  <Space direction="vertical" size={0}>
+                    <Text strong>{item.ingredientName}</Text>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      采购数量：{item.quantity}
+                    </Text>
+                    {item.fridgeIngredient && (
+                      <Text type="secondary" style={{ fontSize: 12, color: '#52c41a' }}>
+                        <CheckCircleOutlined /> 冰箱已有：{item.fridgeIngredient.name} ({item.fridgeIngredient.quantity})
+                        {item.fridgeIngredient.expiryDate && (
+                          <span style={{ marginLeft: 8 }}>
+                            过期日期：{new Date(item.fridgeIngredient.expiryDate).toLocaleDateString('zh-CN')}
+                          </span>
+                        )}
+                      </Text>
+                    )}
+                  </Space>
+                </Space>
+              </Space>
+            </List.Item>
+          )}
+        />
+
+        <div style={{ marginTop: 16, padding: '12px 0', borderTop: '1px solid #f0f0f0' }}>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            💡 勾选的食材将从购物清单中移除，不勾选则继续采购
+          </Text>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
+          <Button 
+            onClick={() => {
+              setDuplicateModalVisible(false);
+              setDuplicateIngredients([]);
+              setSelectedDuplicateIds([]);
+            }}
+          >
+            取消
+          </Button>
+          <Space>
+            <Button onClick={handleIgnoreAndClear}>
+              忽略提示，继续清空
+            </Button>
+            <Button 
+              type="primary" 
+              onClick={handleRemoveDuplicatesAndClear}
+              style={{ background: '#52c41a', borderColor: '#52c41a' }}
+            >
+              {selectedDuplicateIds.length > 0 
+                ? `移除勾选的${selectedDuplicateIds.length}项并清空` 
+                : '移除全部重复项并清空'}
+            </Button>
+          </Space>
+        </div>
+      </Modal>
     </div>
   );
 };

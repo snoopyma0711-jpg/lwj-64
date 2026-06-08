@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Input, Select, Card, Row, Col, Rate, Tag, Button, Space, Empty, message, Badge, Typography, Divider } from 'antd';
-import { SearchOutlined, PlusOutlined, ClockCircleOutlined, UserOutlined, FireOutlined, ShoppingOutlined } from '@ant-design/icons';
+import { SearchOutlined, PlusOutlined, ClockCircleOutlined, UserOutlined, FireOutlined, ShoppingOutlined, WarningOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import request from '../api/request';
 
@@ -122,8 +122,13 @@ const RecipeList = () => {
             <div style={{ marginTop: 8 }}>
               <Text type="secondary">
                 当前搜索食材: <Tag color="orange">{ingredientSearch}</Tag>
-                <Text type="primary"> 按缺少食材数从少到多排序</Text>
+                <Text type="primary"> 优先推荐消耗临期食材的菜谱</Text>
               </Text>
+              <div style={{ marginTop: 4 }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  排序规则：先按能消耗的临期食材数量从多到少排，临期食材数量相同的再按缺少食材数从少到多排
+                </Text>
+              </div>
             </div>
           )}
         </Card>
@@ -153,16 +158,24 @@ const RecipeList = () => {
                   ]}
                 >
                   <div style={{ marginBottom: 12 }}>
-                    <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <Title level={4} style={{ margin: 0, fontSize: 18 }}>{recipe.name}</Title>
-                        {recipe.missingCount !== undefined && (
-                          <Badge 
-                            count={`缺${recipe.missingCount}种`} 
-                            style={{ backgroundColor: '#fff2e8', color: '#fa8c16', border: '1px solid #ffd591' }}
-                          />
-                        )}
-                      </div>
+                        <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
+                            <Title level={4} style={{ margin: 0, fontSize: 18 }}>{recipe.name}</Title>
+                            <Space size={4}>
+                              {recipe.expiringUsedCount !== undefined && recipe.expiringUsedCount > 0 && (
+                                <Badge 
+                                  count={`消${recipe.expiringUsedCount}种临期`} 
+                                  style={{ backgroundColor: '#fff2e8', color: '#fa8c16', border: '1px solid #ffd591', fontWeight: 'bold' }}
+                                />
+                              )}
+                              {recipe.missingCount !== undefined && (
+                                <Badge 
+                                  count={`缺${recipe.missingCount}种`} 
+                                  style={{ backgroundColor: '#f0f0f0', color: '#8c8c8c', border: '1px solid #d9d9d9' }}
+                                />
+                              )}
+                            </Space>
+                          </div>
                       <Space>
                         <span className={`difficulty-tag ${getDifficultyClass(recipe.difficulty)}`}>
                           {recipe.difficulty}
@@ -171,6 +184,28 @@ const RecipeList = () => {
                           {recipe.estimatedTime}分钟
                         </Tag>
                       </Space>
+                      {recipe.usedExpiringIngredients && recipe.usedExpiringIngredients.length > 0 && (
+                        <div style={{ marginTop: 4 }}>
+                          <Text type="secondary" style={{ fontSize: 12 }}>
+                            <WarningOutlined style={{ color: '#faad14', marginRight: 4 }} />
+                            可消耗临期食材：
+                            {recipe.usedExpiringIngredients.map((ing, idx) => (
+                              <Tag 
+                                key={idx} 
+                                color={ing.status === 'expired' ? 'red' : 'orange'} 
+                                style={{ marginLeft: 4, marginRight: 0 }}
+                              >
+                                {ing.name}
+                                {ing.daysLeft !== null && ing.daysLeft !== undefined && (
+                                  <span style={{ marginLeft: 2, fontSize: 11 }}>
+                                    ({ing.daysLeft < 0 ? `过期${Math.abs(ing.daysLeft)}天` : `剩${ing.daysLeft}天`})
+                                  </span>
+                                )}
+                              </Tag>
+                            ))}
+                          </Text>
+                        </div>
+                      )}
                     </Space>
                   </div>
 

@@ -1,6 +1,6 @@
 const express = require('express');
 const { Op } = require('sequelize');
-const { Recipe, User, Rating } = require('../models');
+const { Recipe, User, Rating, FridgeIngredient } = require('../models');
 const auth = require('../middleware/auth');
 const { calculateRecipeNutrition } = require('../utils/nutritionCalculator');
 
@@ -30,16 +30,64 @@ router.get('/', auth, async (req, res) => {
     if (ingredients) {
       const availableIngredients = ingredients.split(',').map(i => i.trim().toLowerCase());
       
+      const fridgeIngredients = await FridgeIngredient.findAll({
+        where: { userId: req.user.id }
+      });
+
+      const expiringIngredients = fridgeIngredients
+        .map(fi => {
+          const status = fi.getExpiryStatus();
+          return {
+            name: fi.ingredientName.toLowerCase(),
+            status: status.status,
+            daysLeft: status.daysLeft
+          };
+        })
+        .filter(fi => fi.status === 'warning' || fi.status === 'expired');
+
+      const expiringNames = expiringIngredients.map(fi => fi.name);
+
       recipes = recipes.map(recipe => {
         const recipeIngredients = recipe.ingredients.map(ing => ing.name.toLowerCase());
         const missingCount = recipeIngredients.filter(
           ing => !availableIngredients.some(avail => avail.includes(ing) || ing.includes(avail))
         ).length;
-        return { ...recipe.toJSON(), missingCount };
+
+        const expiringUsedCount = recipeIngredients.filter(
+          ing => expiringNames.some(expName => expName.includes(ing) || ing.includes(expName))
+        ).length;
+
+        const usedExpiringIngredients = recipeIngredients
+          .filter(ing => expiringNames.some(expName => expName.includes(ing) || ing.includes(expName)))
+          .map(ing => {
+            const match = expiringIngredients.find(ei => ei.name.includes(ing) || ing.includes(ei.name));
+            return {
+              name: ing,
+              status: match?.status,
+              daysLeft: match?.daysLeft
+            };
+          });
+
+        const recipeJson = recipe.toJSON();
+        return { 
+          ...recipeJson, 
+          missingCount, 
+          expiringUsedCount,
+          usedExpiringIngredients
+        };
       });
 
-      recipes = recipes.filter(r => r.missingCount < r.ingredients.length);
-      recipes.sort((a, b) => a.missingCount - b.missingCount);
+      recipes = recipes.filter(r => {
+        const ingredientsLen = Array.isArray(r.ingredients) ? r.ingredients.length : 0;
+        return r.missingCount < ingredientsLen;
+      });
+      
+      recipes.sort((a, b) => {
+        if (b.expiringUsedCount !== a.expiringUsedCount) {
+          return b.expiringUsedCount - a.expiringUsedCount;
+        }
+        return a.missingCount - b.missingCount;
+      });
     }
 
     if (includeNutrition === 'true') {

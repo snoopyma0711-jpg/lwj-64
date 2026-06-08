@@ -1,6 +1,6 @@
 const express = require('express');
 const { Op } = require('sequelize');
-const { WeeklyPlan, Recipe, ShoppingItem, WeeklyPlanRecipe, WeeklyExpense, User } = require('../models');
+const { WeeklyPlan, Recipe, ShoppingItem, WeeklyPlanRecipe, WeeklyExpense, User, FridgeIngredient } = require('../models');
 const auth = require('../middleware/auth');
 const { calculateShoppingListPrices } = require('../utils/priceCalculator');
 const { calculateWeeklyPlanNutrition, findReplacementRecipes } = require('../utils/nutritionCalculator');
@@ -416,9 +416,61 @@ router.put('/shopping-item/:id', auth, async (req, res) => {
   }
 });
 
+router.get('/check-duplicate-ingredients', auth, async (req, res) => {
+  try {
+    const { weekNumber, year } = getCurrentWeek();
+
+    const weeklyPlan = await WeeklyPlan.findOne({
+      where: { userId: req.user.id, weekNumber, year },
+      include: [
+        { model: ShoppingItem, as: 'shoppingItems' }
+      ]
+    });
+
+    if (!weeklyPlan || weeklyPlan.shoppingItems.length === 0) {
+      return res.json({ duplicates: [] });
+    }
+
+    const fridgeIngredients = await FridgeIngredient.findAll({
+      where: { userId: req.user.id }
+    });
+
+    const fridgeNames = fridgeIngredients.map(fi => fi.ingredientName.toLowerCase());
+
+    const duplicates = weeklyPlan.shoppingItems
+      .filter(item => {
+        const itemName = item.ingredientName.toLowerCase();
+        return fridgeNames.some(fn => fn.includes(itemName) || itemName.includes(fn));
+      })
+      .map(item => {
+        const match = fridgeIngredients.find(fi => {
+          const fiName = fi.ingredientName.toLowerCase();
+          const itemName = item.ingredientName.toLowerCase();
+          return fiName.includes(itemName) || itemName.includes(fiName);
+        });
+        return {
+          shoppingItemId: item.id,
+          ingredientName: item.ingredientName,
+          quantity: item.quantity,
+          fridgeIngredient: match ? {
+            id: match.id,
+            name: match.ingredientName,
+            quantity: match.quantity,
+            expiryDate: match.expiryDate
+          } : null
+        };
+      });
+
+    res.json({ duplicates });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 router.delete('/clear', auth, async (req, res) => {
   try {
     const { weekNumber, year } = getCurrentWeek();
+    const { excludeShoppingItemIds } = req.body;
 
     const weeklyPlan = await WeeklyPlan.findOne({
       where: { userId: req.user.id, weekNumber, year },
@@ -456,7 +508,12 @@ router.delete('/clear', auth, async (req, res) => {
     }
 
     await WeeklyPlanRecipe.destroy({ where: { weeklyPlanId: weeklyPlan.id } });
-    await ShoppingItem.destroy({ where: { weeklyPlanId: weeklyPlan.id } });
+    
+    let shoppingItemWhere = { weeklyPlanId: weeklyPlan.id };
+    if (excludeShoppingItemIds && excludeShoppingItemIds.length > 0) {
+      shoppingItemWhere.id = { [Op.notIn]: excludeShoppingItemIds };
+    }
+    await ShoppingItem.destroy({ where: shoppingItemWhere });
 
     const updatedPlan = await WeeklyPlan.findByPk(weeklyPlan.id, {
       include: [
@@ -465,7 +522,25 @@ router.delete('/clear', auth, async (req, res) => {
       ]
     });
 
-    res.json(updatedPlan);
+    const planData = updatedPlan.toJSON();
+    const priceResult = await calculateShoppingListPrices(req.user.id, planData.shoppingItems || []);
+    
+    planData.shoppingItems = priceResult.items;
+    planData.totalEstimatedPrice = priceResult.totalPrice;
+    planData.pricedItemCount = priceResult.pricedCount;
+    planData.unpricedItemCount = priceResult.unpricedCount;
+
+    const nutrition = await calculateWeeklyPlanNutrition(req.user.id, planData.recipes || []);
+    planData.nutrition = nutrition;
+
+    const user = await User.findByPk(req.user.id, { attributes: ['id', 'username', 'dailyCalorieGoal'] });
+    planData.user = {
+      id: user.id,
+      username: user.username,
+      dailyCalorieGoal: user.dailyCalorieGoal
+    };
+
+    res.json(planData);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
